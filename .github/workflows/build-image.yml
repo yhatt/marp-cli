@@ -7,12 +7,9 @@ on:
     tags:
       - v*
 
-  # For debug
-  workflow_dispatch:
-
 env:
-  # DOCKER_HUB_REGISTRY_IMAGE: marpteam/marp-cli
   GITHUB_CONTAINER_REGISTRY_IMAGE: ghcr.io/yhatt/marp-cli
+  DOCKER_HUB_REGISTRY_IMAGE: yhatt/marp-cli
 
 jobs:
   build:
@@ -41,7 +38,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}
+          images: |
+            ${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}
+            ${{ env.DOCKER_HUB_REGISTRY_IMAGE }}
 
       # TODO: It is removable if ARM64 runner is available
       - name: Set up QEMU
@@ -49,6 +48,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -63,7 +68,8 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          push: true
+          outputs: name="${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }},${{ env.DOCKER_HUB_REGISTRY_IMAGE }}",push-by-digest=true,name-canonical=true
 
       - name: Export digest
         run: |
@@ -98,7 +104,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}
+          images: |
+            ${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}
+            ${{ env.DOCKER_HUB_REGISTRY_IMAGE }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -110,9 +118,12 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+          docker buildx imagetools create $(jq -cr '.tags | map(select(startswith("${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}")) | "-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}@sha256:%s ' *)
+          docker buildx imagetools create $(jq -cr '.tags | map(select(startswith("${{ env.DOCKER_HUB_REGISTRY_IMAGE }}")) | "-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.DOCKER_HUB_REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.DOCKER_HUB_REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
