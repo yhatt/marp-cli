@@ -68,8 +68,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          push: true
-          outputs: '"name=${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }},${{ env.DOCKER_HUB_REGISTRY_IMAGE }}",push-by-digest=true,name-canonical=true'
+          outputs: type=registry,'"name=${{ env.GITHUB_CONTAINER_REGISTRY_IMAGE }},${{ env.DOCKER_HUB_REGISTRY_IMAGE }}",push-by-digest=true,name-canonical=true'
 
       - name: Export digest
         run: |
